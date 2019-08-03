@@ -23,7 +23,7 @@
 #define SET_LCD_RS_DATA()    *gpiohs->output_val.u32 |= (1<<8);
 #define SET_LCD_RS_COMMAND() *gpiohs->output_val.u32 &= ~(1<<8);
 
-#define SET_LCD_DATA(a) *gpiohs->output_val.u32=(*gpiohs->output_val.u32&0xFFFFFF00)|(uint32_t)(a)
+#define SET_LCD_DATA(a) *gpiohs->output_val.u32=(*gpiohs->output_val.u32&0xFFFFFF00)|((a)&0xFF)
 
 #define SET_LCD_WRITE() { SET_LCD_WR_LOW(); \
                           SET_LCD_WR_HIGH(); }
@@ -169,6 +169,14 @@ void LCD_Initial() {
   Write_Data_Register(0x00);  //Set FPS
   Write_Data_Register(0x00);
 
+  // Backlight
+  write_command(0x00B8);
+  Write_Data_Register(0x000f);    //GPIO is controlled by host GPIO[3:0]=output   GPIO[0]=1  LCD ON  GPIO[0]=1  LCD OFF 
+  Write_Data_Register(0x0001);    //GPIO0 normal
+
+  write_command(0x00BA);
+  Write_Data_Register(0x0001);    //GPIO[0] out 1 --- LCD display on/off control PIN
+
   write_command(0x0036); //rotation
   Write_Data_Register(0x0008);//RGB=BGR
   
@@ -177,6 +185,19 @@ void LCD_Initial() {
   Write_Data_Register(0x0000);//8-bit data 
   delay(5);
   write_command(0x0029); //display on
+
+  
+
+  write_command(0x00BE); //set PWM for B/L
+  Write_Data_Register(0x0006);
+  Write_Data_Register(0x0080);
+  Write_Data_Register(0x0001);
+  Write_Data_Register(0x00f0);
+  Write_Data_Register(0x0000);
+  Write_Data_Register(0x0000);
+
+  write_command(0x00d0); 
+  Write_Data_Register(0x000d);
 }
 
 
