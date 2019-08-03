@@ -1,101 +1,81 @@
-// Pin Control
-#define SSD1963_RS     32    // Data or Command
-#define SSD1963_WR     33    // Write
-#define SSD1963_RD     34    // Read
-#define SSD1963_CS     35    // Chip select
-#define SSD1963_RESET  36    // Reset
+/*
+ * Wireing
+ *   D0     <-> 16
+ *   D1     <-> 17
+ *   D2     <-> 18
+ *   D3     <-> 19
+ *   D4     <-> 20
+ *   D5     <-> 21
+ *   D6     <-> 22
+ *   D7     <-> 23
+ *   RS     <-> 24
+ *   WR     <-> 25
+ *   RD     <-> 3V3
+ *   CS     <-> GND
+ *   /RESET <-> RST
+ *   VDD    <-> 3V3
+ *   VSS    <-> GND
+ */
 
-#define SET_LCD_RESET() { digitalWrite(SSD1963_RESET, 1); \
-                          delay(50); \
-                          digitalWrite(SSD1963_RESET, 0); \
-                          delay(100); \
-                          digitalWrite(SSD1963_RESET, 1); \
-                          delay(100); }
+#define SET_LCD_WR_HIGH() *gpiohs->output_val.u32 |= (1<<9);
+#define SET_LCD_WR_LOW()  *gpiohs->output_val.u32 &= ~(1<<9);
 
-
-#define SET_LCD_CS(a) digitalWrite(SSD1963_CS, a)
-#define SET_LCD_RS(a) digitalWrite(SSD1963_RS, a)
-#define SET_LCD_WR(a) digitalWrite(SSD1963_WR, a)
-
-#define SET_LCD_WR_ACTIVE() *gpiohs->output_val.u32 |= (1<<17);
-#define SET_LCD_WR_NON_ACTIVE() *gpiohs->output_val.u32 &= ~(1<<17);
-
-#define SET_LCD_RS_DATA() *gpiohs->output_val.u32 |= (1<<16);
-#define SET_LCD_RS_COMMAND() *gpiohs->output_val.u32 &= ~(1<<16);
+#define SET_LCD_RS_DATA()    *gpiohs->output_val.u32 |= (1<<8);
+#define SET_LCD_RS_COMMAND() *gpiohs->output_val.u32 &= ~(1<<8);
 
 #define SET_LCD_DATA(a) *gpiohs->output_val.u32=(*gpiohs->output_val.u32&0xFFFFFF00)|(uint32_t)(a)
 
-int nsleep(uint64_t nsec) {
-    uint64_t cycle = read_cycle();
-    uint64_t nop_all = nsec * 4;
-    while (1)
-    {
-        if(read_cycle() - cycle >= nop_all)
-            break;
-    }
-    return 0;
-}
+#define SET_LCD_WRITE() { SET_LCD_WR_LOW(); \
+                          SET_LCD_WR_HIGH(); }
+                          
+#define SET_LCD_WRITE_SLOW() { usleep(100); \
+                               SET_LCD_WR_LOW(); \
+                               usleep(100); \
+                               SET_LCD_WR_HIGH(); }                   
 
-#define SET_LCD_WRITE() { SET_LCD_WR_NON_ACTIVE(); \
-                          SET_LCD_WR_ACTIVE(); }
+#define COLOR565_TO_R8(color) (((((color >> 11) & 0x1F) * 527) + 23) >> 6)
+#define COLOR565_TO_G8(color) ((((color >> 5) & 0x3F) * 259) + 33) >> 6
+#define COLOR565_TO_B8(color) (((color & 0x1F) * 527) + 23) >> 6
 
 // Config LCD
-#define LCD_WIDTH  480
-#define LCD_HEIGHT 272
+#define LCD_WIDTH  800
+#define LCD_HEIGHT 480
 
 void write_command(uint8_t c) {
   SET_LCD_RS_COMMAND();
 
   SET_LCD_DATA(c);
-  SET_LCD_WRITE();
+  SET_LCD_WRITE_SLOW();
 }
 
 void Write_Data_Register(uint8_t d) {
   SET_LCD_RS_DATA();
 
   SET_LCD_DATA(d);
-  SET_LCD_WRITE();
+  SET_LCD_WRITE_SLOW();
 }
 
-void Write_Data_Color(uint32_t d) {
+void Write_Data_Color(uint16_t color) {
   SET_LCD_RS_DATA();
 
-  SET_LCD_DATA((d>>16)&0xFF);
+  SET_LCD_DATA(COLOR565_TO_R8(color));
   SET_LCD_WRITE();
 
-  SET_LCD_DATA((d>>8)&0xFF);
+  SET_LCD_DATA(COLOR565_TO_G8(color));
   SET_LCD_WRITE();
 
-  SET_LCD_DATA(d&0xFF);
+  SET_LCD_DATA(COLOR565_TO_B8(color));
   SET_LCD_WRITE();
 }
 
 void LCD_clear(uint32_t i) {
   LCD_SetPos(0, LCD_WIDTH - 1, 0, LCD_HEIGHT - 1);
-  for(int h=0;h<LCD_HEIGHT;h++) {
-    for(int w=0;w<LCD_WIDTH;w++) {
+  for(uint16_t h=0;h<LCD_HEIGHT;h++) {
+    for(uint16_t w=0;w<LCD_WIDTH;w++) {
       Write_Data_Color(i);
     }
   }
 }
-
-/*
-void LCD_clear(uint16_t i) {
-  LCD_SetPos(0, LCD_WIDTH - 1, 0, LCD_HEIGHT - 1);
-
-  SET_LCD_RS_DATA();
-
-  // Set data output
-  SET_LCD_DATA(i);
-
-  for(int h=0;h<LCD_HEIGHT;h++) {
-    for(int w=0;w<LCD_WIDTH;w++) {
-      // Write to LCD
-      SET_LCD_WRITE();
-    }
-  }
-}
-*/
 
 void LCD_SetPos(uint16_t xs, uint16_t xe, uint16_t ys, uint16_t ye) {
   write_command(0x002A);  
@@ -104,17 +84,42 @@ void LCD_SetPos(uint16_t xs, uint16_t xe, uint16_t ys, uint16_t ye) {
   Write_Data_Register(xe>>8);      
   Write_Data_Register(xe&0x00ff);
   
-  write_command(0x002b);  
+  write_command(0x002B);  
   Write_Data_Register(ys>>8);      
   Write_Data_Register(ys&0x00ff);
   Write_Data_Register(ye>>8);      
   Write_Data_Register(ye&0x00ff);
-  write_command(0x002c); 
+  
+  write_command(0x002C); 
 }
 
 
-void SSD1963_Initial() {
-  SET_LCD_RESET();
+void LCD_Initial() {
+  // Data bus
+  fpioa_set_function(16, FUNC_GPIOHS0);
+  fpioa_set_function(17, FUNC_GPIOHS1);
+  fpioa_set_function(18, FUNC_GPIOHS2);
+  fpioa_set_function(19, FUNC_GPIOHS3);
+  fpioa_set_function(20, FUNC_GPIOHS4);
+  fpioa_set_function(21, FUNC_GPIOHS5);
+  fpioa_set_function(22, FUNC_GPIOHS6);
+  fpioa_set_function(23, FUNC_GPIOHS7);
+  gpiohs_set_drive_mode(0, GPIO_DM_OUTPUT);
+  gpiohs_set_drive_mode(1, GPIO_DM_OUTPUT);
+  gpiohs_set_drive_mode(2, GPIO_DM_OUTPUT);
+  gpiohs_set_drive_mode(3, GPIO_DM_OUTPUT);
+  gpiohs_set_drive_mode(4, GPIO_DM_OUTPUT);
+  gpiohs_set_drive_mode(5, GPIO_DM_OUTPUT);
+  gpiohs_set_drive_mode(6, GPIO_DM_OUTPUT);
+  gpiohs_set_drive_mode(7, GPIO_DM_OUTPUT);
+
+  // Control bus
+  fpioa_set_function(24, FUNC_GPIOHS8);
+  fpioa_set_function(25, FUNC_GPIOHS9);
+  gpiohs_set_drive_mode(8, GPIO_DM_OUTPUT);
+  gpiohs_set_drive_mode(9, GPIO_DM_OUTPUT);
+  
+  // SET_LCD_RESET();
   delay(1);
   
   write_command(0x00E2);   //PLL multiplier, set PLL clock to 120M
@@ -174,49 +179,11 @@ void SSD1963_Initial() {
 
 
 void setup() {
-
-  // LCD
-  pinMode(16, OUTPUT); // DATA 0
-  pinMode(17, OUTPUT); // DATA 1
-  pinMode(18, OUTPUT); // DATA 2
-  pinMode(19, OUTPUT); // DATA 3
-  pinMode(20, OUTPUT); // DATA 4
-  pinMode(21, OUTPUT); // DATA 5
-  pinMode(22, OUTPUT); // DATA 6
-  pinMode(23, OUTPUT); // DATA 7
-  pinMode(24, OUTPUT); // DATA 8
-  pinMode(25, OUTPUT); // DATA 9
-  pinMode(26, OUTPUT); // DATA 10
-  pinMode(27, OUTPUT); // DATA 11
-  pinMode(28, OUTPUT); // DATA 12
-  pinMode(29, OUTPUT); // DATA 13
-  pinMode(30, OUTPUT); // DATA 14
-  pinMode(31, OUTPUT); // DATA 15
-  pinMode(SSD1963_RS, OUTPUT); // RS
-  pinMode(SSD1963_WR, OUTPUT); // WR
-  pinMode(SSD1963_RD, OUTPUT); // RD
-  pinMode(SSD1963_CS, OUTPUT); // CS
-  pinMode(SSD1963_RESET, OUTPUT); // RESET
-
-  digitalWrite(SSD1963_CS, 0);
-  digitalWrite(SSD1963_RESET, 0);
-  digitalWrite(SSD1963_RS, 0);
-  digitalWrite(SSD1963_WR, 1);
-  digitalWrite(SSD1963_RD, 1);
-  
-  SSD1963_Initial();
+  LCD_Initial();
 }
 
 void loop() {
-  /*
   LCD_clear(0xF800);
   LCD_clear(0x07E0);
   LCD_clear(0x001F);
-  */
-
-  LCD_clear(0x000000);
-  LCD_clear(0xFF0000);
-  LCD_clear(0x00FF00);
-  LCD_clear(0x0000FF);
-  LCD_clear(0xFFFFFF);
 }
