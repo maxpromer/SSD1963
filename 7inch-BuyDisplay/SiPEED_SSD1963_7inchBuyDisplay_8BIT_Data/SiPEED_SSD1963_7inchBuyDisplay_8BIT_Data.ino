@@ -118,6 +118,8 @@ void LCD_Initial() {
   fpioa_set_function(25, FUNC_GPIOHS9);
   gpiohs_set_drive_mode(8, GPIO_DM_OUTPUT);
   gpiohs_set_drive_mode(9, GPIO_DM_OUTPUT);
+
+  SET_LCD_WR_HIGH();
   
   // SET_LCD_RESET();
   delay(1);
@@ -142,7 +144,7 @@ void LCD_Initial() {
   write_command(0x00B0);  //LCD SPECIFICATION
   Write_Data_Register(0x0020); //24 bit TFT panel
   Write_Data_Register(0x0000); //Hsync+Vsync +DE mode  TFT mode
-  Write_Data_Register((799>>8));  //Set HDP
+  Write_Data_Register(799>>8);  //Set HDP
   Write_Data_Register(799);
   Write_Data_Register(479>>8);  //Set VDP
   Write_Data_Register(479);
