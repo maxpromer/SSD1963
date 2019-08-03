@@ -9,7 +9,7 @@
  *   D6     <-> 22
  *   D7     <-> 23
  *   RS     <-> 24
- *   WR     <-> 25
+ *   E      <-> 25
  *   RD     <-> 3V3
  *   CS     <-> GND
  *   /RESET <-> RST
@@ -106,12 +106,13 @@ void Write_Data_Color(uint16_t color) {
   spi_init(SSD1963_SPI_CH, SPI_MODE, SPI_FF_OCTAL, 8, 0);
   spi_init_non_standard(SPI_DEVICE_0, 8, 0, 0, SPI_AITM_AS_FRAME_FORMAT);
 
-  spi_set_clk_rate(SSD1963_SPI_CH, 1E6);
+  spi_set_clk_rate(SSD1963_SPI_CH, 20E6);
   
   spi_send_data_normal_dma(SSD1963_DMA_CH, SSD1963_SPI_CH, SPI_CHIP_SELECT_0, dataBuffer, 3, SPI_TRANS_CHAR);
   dmac_wait_done(SSD1963_DMA_CH);
 }
 
+/*
 void LCD_clear(uint32_t i) {
   LCD_SetPos(0, LCD_WIDTH - 1, 0, LCD_HEIGHT - 1);
   for(uint16_t h=0;h<LCD_HEIGHT;h++) {
@@ -119,6 +120,43 @@ void LCD_clear(uint32_t i) {
       Write_Data_Color(i);
     }
   }
+}
+*/
+
+#define RESIZE 20
+#define BUFFER_SIZE (((LCD_WIDTH * LCD_HEIGHT) / RESIZE) * 3)
+uint8_t colorBuffer[BUFFER_SIZE];
+void LCD_clear(uint32_t color) {
+  /*
+  uint32_t inx = 0;
+  for(uint16_t h=0;h<LCD_HEIGHT;h++) {
+    for(uint16_t w=0;w<LCD_WIDTH;w++) {
+      // Write_Data_Color(i);
+      colorBuffer[inx++] = COLOR565_TO_R8(color);
+      colorBuffer[inx++] = COLOR565_TO_G8(color);
+      colorBuffer[inx++] = COLOR565_TO_B8(color);
+    }
+  }*/
+  for (uint32_t inx=0;inx<BUFFER_SIZE;) {
+    colorBuffer[inx++] = COLOR565_TO_R8(color);
+    colorBuffer[inx++] = COLOR565_TO_G8(color);
+    colorBuffer[inx++] = COLOR565_TO_B8(color);
+  }
+
+  LCD_SetPos(0, LCD_WIDTH - 1, 0, LCD_HEIGHT - 1);
+
+  SET_LCD_RS_DATA();
+
+  spi_init(SSD1963_SPI_CH, SPI_MODE, SPI_FF_OCTAL, 8, 0);
+  spi_init_non_standard(SPI_DEVICE_0, 8, 0, 0, SPI_AITM_AS_FRAME_FORMAT);
+
+  spi_set_clk_rate(SSD1963_SPI_CH, 20E6);
+
+  for (uint8_t i=0;i<RESIZE;i++) {
+    spi_send_data_normal_dma(SSD1963_DMA_CH, SSD1963_SPI_CH, SPI_CHIP_SELECT_0, colorBuffer, BUFFER_SIZE, SPI_TRANS_CHAR);
+    
+  }
+  dmac_wait_done(SSD1963_DMA_CH);
 }
 
 void LCD_SetPos(uint16_t xs, uint16_t xe, uint16_t ys, uint16_t ye) {
@@ -179,6 +217,7 @@ void LCD_Initial() {
   fpioa_set_function(23, FUNC_SPI0_D7);
   
   fpioa_set_function(24, FUNC_GPIOHS8); // Map RS to GPIOHS
+  gpiohs_set_drive_mode(8, GPIO_DM_OUTPUT);
   
   fpioa_set_function(25, FUNC_SPI0_SCLK); // Map WR pin
   fpioa_set_function(30, FUNC_SPI0_SS0); // Map CS pin (Not use)
@@ -277,6 +316,9 @@ void setup() {
 
 void loop() {
   LCD_clear(0xF800);
+  delay(500);
   LCD_clear(0x07E0);
+  delay(500);
   LCD_clear(0x001F);
+  delay(500);
 }
